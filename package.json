@@ -1,0 +1,32 @@
+{
+  "name": "yoto-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Yoto API integration",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "yoto-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "yoto",
+    "audio",
+    "myo"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}

@@ -49,7 +49,7 @@ async function authenticate(): Promise<string> {
   // Try to refresh
   if (config.refreshToken) {
     try {
-      const response = await fetch(${AUTH_SERVER}/oauth/token, {
+      const response = await fetch(`${AUTH_SERVER}/oauth/token`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -79,8 +79,7 @@ async function authenticate(): Promise<string> {
 
 // Yoto API: Device Authorization Flow
 async function deviceAuthFlow(): Promise<YotoConfig> {
-  // Step 1: Request device code
-  const deviceResponse = await fetch(${AUTH_SERVER}/oauth/device/code, {
+  const deviceResponse = await fetch(`${AUTH_SERVER}/oauth/device/code`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -93,13 +92,12 @@ async function deviceAuthFlow(): Promise<YotoConfig> {
   const deviceData: any = await deviceResponse.json();
   const { device_code, user_code, verification_uri, verification_uri_complete, interval } = deviceData;
 
-  console.error(\n🔐 Yoto Authentication Required\n);
-  console.error(Please visit: );
-  console.error(Or go to: );
-  console.error(And enter code: \n);
-  console.error(Waiting for authorization...);
+  console.error(`\n🔐 Yoto Authentication Required\n`);
+  console.error(`Please visit: ${verification_uri_complete}`);
+  console.error(`Or go to: ${verification_uri}`);
+  console.error(`And enter code: ${user_code}\n`);
+  console.error(`Waiting for authorization...`);
 
-  // Step 2: Poll for authorization
   let attempts = 0;
   const maxAttempts = 60;
 
@@ -107,7 +105,7 @@ async function deviceAuthFlow(): Promise<YotoConfig> {
     await new Promise(resolve => setTimeout(resolve, interval * 1000));
 
     try {
-      const tokenResponse = await fetch(${AUTH_SERVER}/oauth/token, {
+      const tokenResponse = await fetch(`${AUTH_SERVER}/oauth/token`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -142,12 +140,11 @@ async function uploadAndTranscodeAudio(
   audioFilePath: string,
   accessToken: string
 ): Promise<any> {
-  // Step 1: Get upload URL
   const uploadUrlResponse = await fetch(
-    ${API_SERVER}/media/transcode/audio/uploadUrl,
+    `${API_SERVER}/media/transcode/audio/uploadUrl`,
     {
       headers: {
-        Authorization: Bearer ,
+        Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
       },
     }
@@ -156,7 +153,6 @@ async function uploadAndTranscodeAudio(
   const uploadData: any = await uploadUrlResponse.json();
   const { uploadUrl, uploadId } = uploadData.upload;
 
-  // Step 2: Upload the audio file
   const audioBuffer = await readFile(audioFilePath);
   await fetch(uploadUrl, {
     method: "PUT",
@@ -164,7 +160,6 @@ async function uploadAndTranscodeAudio(
     headers: { "Content-Type": "audio/mpeg" },
   });
 
-  // Step 3: Wait for transcoding
   let transcodedAudio: any = null;
   let attempts = 0;
   const maxAttempts = 30;
@@ -173,10 +168,10 @@ async function uploadAndTranscodeAudio(
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const transcodeResponse = await fetch(
-      ${API_SERVER}/media/upload/h3tV5imZxOQZE7OV896Z4/transcoded?loudnorm=false,
+      `${API_SERVER}/media/upload/${uploadId}/transcoded?loudnorm=false`,
       {
         headers: {
-          Authorization: Bearer ,
+          Authorization: `Bearer ${accessToken}`,
           Accept: "application/json",
         },
       }
@@ -199,132 +194,15 @@ async function uploadAndTranscodeAudio(
   return transcodedAudio;
 }
 
-// Yoto API: List cards
-async function listCards(): Promise<any[]> {
-  const accessToken = await authenticate();
-  
-  const response = await fetch(${API_SERVER}/content?type=myo, {
-    headers: {
-      Authorization: Bearer ,
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(Failed to list cards: );
-  }
-
-  const data: any = await response.json();
-  return data.cards || [];
-}
-
-// Yoto API: Get card details
-async function getCard(cardId: string): Promise<any> {
-  const accessToken = await authenticate();
-  
-  const response = await fetch(${API_SERVER}/content/, {
-    headers: {
-      Authorization: Bearer ,
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(Failed to get card: );
-  }
-
-  const data: any = await response.json();
-  return data.card;
-}
-
-// Yoto API: Add track to existing card
-async function addTrackToCard(
-  cardId: string,
-  audioFilePath: string,
-  trackTitle: string
-): Promise<{ cardId: string; title: string }> {
-  const accessToken = await authenticate();
-
-  // Get existing card
-  const card = await getCard(cardId);
-  
-  // Upload and transcode audio
-  const transcodedAudio = await uploadAndTranscodeAudio(audioFilePath, accessToken);
-  const mediaInfo = transcodedAudio.transcodedInfo;
-
-  // Create new track
-  const existingChapters = card.content?.chapters || [];
-  const nextChapterNum = existingChapters.length + 1;
-  const chapterKey = String(nextChapterNum).padStart(2, '0');
-
-  const newTrack = {
-    key: chapterKey,
-    title: trackTitle,
-    trackUrl: yoto:#,
-    duration: mediaInfo.duration,
-    fileSize: mediaInfo.fileSize,
-    channels: mediaInfo.channels,
-    format: mediaInfo.format,
-    type: "audio",
-    overlayLabel: String(nextChapterNum),
-    display: {
-      icon16x16: "yoto:#aUm9i3ex3qqAMYBv-i-O-pYMKuMJGICtR3Vhf289u2Q",
-    },
-  };
-
-  // Add new chapter with track
-  const updatedChapters = [
-    ...existingChapters,
-    {
-      key: chapterKey,
-      title: trackTitle,
-      overlayLabel: String(nextChapterNum),
-      tracks: [newTrack],
-      display: {
-        icon16x16: "yoto:#aUm9i3ex3qqAMYBv-i-O-pYMKuMJGICtR3Vhf289u2Q",
-      },
-    },
-  ];
-
-  // Update card
-  const updateResponse = await fetch(${API_SERVER}/content/, {
-    method: "PUT",
-    headers: {
-      Authorization: Bearer ,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      title: card.title,
-      content: {
-        ...card.content,
-        chapters: updatedChapters,
-      },
-    }),
-  });
-
-  if (!updateResponse.ok) {
-    throw new Error(Failed to update card: );
-  }
-
-  const result: any = await updateResponse.json();
-  return {
-    cardId: result.card.cardId,
-    title: result.card.title,
-  };
-}
-
-// Yoto API: Upload audio and create new card
+// Yoto API: Upload audio and create card
 async function uploadAudioToYoto(
   audioFilePath: string,
   title: string
 ): Promise<{ cardId: string; title: string }> {
   const accessToken = await authenticate();
-
-  // Upload and transcode
   const transcodedAudio = await uploadAndTranscodeAudio(audioFilePath, accessToken);
   const mediaInfo = transcodedAudio.transcodedInfo;
 
-  // Create card with transcoded audio
   const content = {
     title,
     content: {
@@ -337,7 +215,7 @@ async function uploadAudioToYoto(
             {
               key: "01",
               title,
-              trackUrl: yoto:#,
+              trackUrl: `yoto:#${transcodedAudio.transcodedSha256}`,
               duration: mediaInfo.duration,
               fileSize: mediaInfo.fileSize,
               channels: mediaInfo.channels,
@@ -364,20 +242,128 @@ async function uploadAudioToYoto(
     },
   };
 
-  const createResponse = await fetch(${API_SERVER}/content, {
+  const createResponse = await fetch(`${API_SERVER}/content`, {
     method: "POST",
     headers: {
-      Authorization: Bearer ,
+      Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(content),
   });
 
   if (!createResponse.ok) {
-    throw new Error(Failed to create card: );
+    throw new Error(`Failed to create card: ${await createResponse.text()}`);
   }
 
   const result: any = await createResponse.json();
+  return {
+    cardId: result.card.cardId,
+    title: result.card.title,
+  };
+}
+
+// Yoto API: List cards
+async function listCards(): Promise<any[]> {
+  const accessToken = await authenticate();
+  
+  const response = await fetch(`${API_SERVER}/content?type=myo`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to list cards: ${await response.text()}`);
+  }
+
+  const data: any = await response.json();
+  return data.cards || [];
+}
+
+// Yoto API: Get card details
+async function getCard(cardId: string): Promise<any> {
+  const accessToken = await authenticate();
+  
+  const response = await fetch(`${API_SERVER}/content/${cardId}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get card: ${await response.text()}`);
+  }
+
+  const data: any = await response.json();
+  return data.card;
+}
+
+// Yoto API: Add track to existing card
+async function addTrackToCard(
+  cardId: string,
+  audioFilePath: string,
+  trackTitle: string
+): Promise<{ cardId: string; title: string }> {
+  const accessToken = await authenticate();
+  const card = await getCard(cardId);
+  
+  const transcodedAudio = await uploadAndTranscodeAudio(audioFilePath, accessToken);
+  const mediaInfo = transcodedAudio.transcodedInfo;
+
+  const existingChapters = card.content?.chapters || [];
+  const nextChapterNum = existingChapters.length + 1;
+  const chapterKey = String(nextChapterNum).padStart(2, '0');
+
+  const newTrack = {
+    key: chapterKey,
+    title: trackTitle,
+    trackUrl: `yoto:#${transcodedAudio.transcodedSha256}`,
+    duration: mediaInfo.duration,
+    fileSize: mediaInfo.fileSize,
+    channels: mediaInfo.channels,
+    format: mediaInfo.format,
+    type: "audio",
+    overlayLabel: String(nextChapterNum),
+    display: {
+      icon16x16: "yoto:#aUm9i3ex3qqAMYBv-i-O-pYMKuMJGICtR3Vhf289u2Q",
+    },
+  };
+
+  const updatedChapters = [
+    ...existingChapters,
+    {
+      key: chapterKey,
+      title: trackTitle,
+      overlayLabel: String(nextChapterNum),
+      tracks: [newTrack],
+      display: {
+        icon16x16: "yoto:#aUm9i3ex3qqAMYBv-i-O-pYMKuMJGICtR3Vhf289u2Q",
+      },
+    },
+  ];
+
+  const updateResponse = await fetch(`${API_SERVER}/content/${cardId}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      title: card.title,
+      content: {
+        ...card.content,
+        chapters: updatedChapters,
+      },
+    }),
+  });
+
+  if (!updateResponse.ok) {
+    throw new Error(`Failed to update card: ${await updateResponse.text()}`);
+  }
+
+  const result: any = await updateResponse.json();
   return {
     cardId: result.card.cardId,
     title: result.card.title,
@@ -551,14 +537,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const cardsList = cards.map((card: any) => 
-          •  (ID: )
+          `• ${card.title} (ID: ${card.cardId})`
         ).join("\n");
 
         return {
           content: [
             {
               type: "text",
-              text: 📚 Your MYO Cards:\n\n,
+              text: `📚 Your MYO Cards:\n\n${cardsList}`,
             },
           ],
         };
@@ -581,7 +567,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: "text",
-              text: 📀 Card Details:\n\nTitle: \nCard ID: \nChapters: \nTracks: \nCreated: ,
+              text: `📀 Card Details:\n\nTitle: ${card.title}\nCard ID: ${card.cardId}\nChapters: ${chapters.length}\nTracks: ${trackCount}\nCreated: ${new Date(card.createdAt).toLocaleString()}`,
             },
           ],
         };
@@ -604,7 +590,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: "text",
-              text: ✅ Successfully added track to card!\n\nCard ID: \nCard Title: \nTrack: \n\nThe track has been added to your existing MYO card.,
+              text: `✅ Successfully added track to card!\n\nCard ID: ${result.cardId}\nCard Title: ${result.title}\nTrack: ${trackTitle}\n\nThe track has been added to your existing MYO card.`,
             },
           ],
         };
@@ -626,21 +612,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: "text",
-              text: ✅ Successfully uploaded audio to Yoto!\n\nCard ID: \nTitle: \n\nYou can now link this card to a physical MYO card using your Yoto app or player.,
+              text: `✅ Successfully uploaded audio to Yoto!\n\nCard ID: ${result.cardId}\nTitle: ${result.title}\n\nYou can now link this card to a physical MYO card using your Yoto app or player.`,
             },
           ],
         };
       }
 
       default:
-        throw new Error(Unknown tool: );
+        throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
     return {
       content: [
         {
           type: "text",
-          text: Error: ,
+          text: `Error: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
       isError: true,

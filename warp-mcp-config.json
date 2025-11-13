@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "yoto": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\ben\\source\\repos\\yoto-mcp-server\\dist\\index.js"
+      ]
+    }
+  }
+}
